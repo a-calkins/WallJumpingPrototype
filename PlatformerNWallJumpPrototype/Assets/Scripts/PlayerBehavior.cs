@@ -2,13 +2,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/* wall jumping and wall sliding */
 public class PlayerBehavior : MonoBehaviour
 {
-    private float speed = 5f;
-    private float moveSpeedWhenJumping = 2f;
+    private float speed = 3f;
+    private float moveSpeedWhenJumping = 3f;
     private Vector3 pos;
-    [SerializeField] private LayerMask mask;
+    private int maxHealth = 3, currentHealth;
+    
     private float jumpPower = 15f;
+    private float invincibility, invincibilityTime = 1f;
     private Rigidbody2D rb;
     private BoxCollider2D box;
     private RaycastHit2D hitInfo;
@@ -19,23 +22,47 @@ public class PlayerBehavior : MonoBehaviour
     private bool wallJumping;
     private bool isTouchingFront;
     private bool facingRight;
-    //public Transform frontCheck;
-    public float wallSlidingSpeed;
-    public float xWallForce;
-    public float yWallForce;
-    public float wallJumpTime;
+    private bool invincible = false;
+    private bool controllable = true;
+
+    SpriteRenderer sr;
+    
+    [SerializeField] private LayerMask mask;
+    [SerializeField] private float wallSlidingSpeed;
+    [SerializeField] private float xWallForce;
+    [SerializeField] private float yWallForce;
+    [SerializeField] private float wallJumpTime;
+    [SerializeField] private Health health;
+
     // Start is called before the first frame update
     void Start()
     {
+        currentHealth = maxHealth;
         rb = GetComponent<Rigidbody2D>();
         box = GetComponent<BoxCollider2D>();
+        sr = GetComponent<SpriteRenderer>();
+        health.SetMaxHealth(maxHealth);
+        invincibility = invincibilityTime;
     }
 
     // Update is called once per frame
     void Update()
     {
-        Move();
-        CheckFront();
+        if(controllable) {
+            Move();
+            CheckFront();
+        }
+        if(invincible && invincibility > 0) {
+            sr.color = Color.yellow;
+            invincibility -= Time.deltaTime;
+        }
+        else {
+            invincible = false;
+            controllable = true;
+            invincibility = invincibilityTime;
+            sr.color = Color.black;
+        }
+        
     }
 
     //this method handles player movement
@@ -55,6 +82,7 @@ public class PlayerBehavior : MonoBehaviour
             pos.x += speed * Time.deltaTime;
            //rb.velocity = Vector3.right * speed;
         }
+        
         //jumping
         if(Input.GetKeyDown(KeyCode.Space) && IsGrounded())
         {
@@ -63,6 +91,7 @@ public class PlayerBehavior : MonoBehaviour
         }
         if (isJumping && Input.GetKey("a") && !wallSliding && !wallJumping)
         {
+            facingRight = false;
             pos.x -= moveSpeedWhenJumping * Time.deltaTime;
         }
         if (isJumping && Input.GetKey("d") && !wallSliding && !wallJumping)
@@ -78,7 +107,8 @@ public class PlayerBehavior : MonoBehaviour
         if(facingRight)
         {
             frontHit = Physics2D.BoxCast(box.bounds.center, box.bounds.size, 0f, Vector3.right, 0.1f, mask);
-        } else
+        } 
+        else
         {
             frontHit = Physics2D.BoxCast(box.bounds.center, box.bounds.size, 0f, Vector3.left, 0.1f, mask);
         }
@@ -92,7 +122,6 @@ public class PlayerBehavior : MonoBehaviour
         {
             wallSliding = false;
         }
-
         if(wallSliding)
         {
             WallSlide();
@@ -105,7 +134,18 @@ public class PlayerBehavior : MonoBehaviour
     //this method handles the physics for wallsliding
     void WallSlide()
     {
-        rb.velocity = new Vector3(rb.velocity.x, Mathf.Clamp(rb.velocity.y, -wallSlidingSpeed, float.MaxValue));
+        float newSlideSpeed = wallSlidingSpeed * 5f;
+        if(Input.GetKey("s")) {
+            newSlideSpeed *= 10f;
+            rb.velocity = new Vector3(rb.velocity.x, Mathf.Clamp(rb.velocity.y, -newSlideSpeed, float.MaxValue));
+        }
+        else if(Input.GetKey("a") || Input.GetKey("d")) {
+            rb.velocity = new Vector3(rb.velocity.x, Mathf.Clamp(rb.velocity.y, (-wallSlidingSpeed * 0.001f), float.MaxValue)); 
+        }
+        else {
+           rb.velocity = new Vector3(rb.velocity.x, Mathf.Clamp(rb.velocity.y, -wallSlidingSpeed, float.MaxValue)); 
+        }
+            
     }
     //this method handles physics for walljumping
     void WallJump()
@@ -138,5 +178,22 @@ public class PlayerBehavior : MonoBehaviour
     void SetWallJumpingFalse()
     {
         wallJumping = false;
+    }
+
+    void OnTriggerEnter2D(Collider2D collider) {
+        if(collider.gameObject.tag == "enemy" && !invincible) {
+            controllable = false;
+            invincible = true;
+            if(facingRight) {
+                rb.velocity = (Vector3.up + Vector3.left) * jumpPower / 3;
+            }
+            else {
+                rb.velocity = (Vector3.up + Vector3.right) * jumpPower / 3;
+            }
+            if(currentHealth > 0)
+                currentHealth -= 1; 
+            health.SetHealth(currentHealth);
+            Debug.Log("current health: " + currentHealth);
+        }
     }
 }
